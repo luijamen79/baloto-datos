@@ -1,11 +1,11 @@
 {
  "meta": {
-  "actualizado": "2026-07-28T00:00:00.000Z",
-  "total": 450,
+  "actualizado": "2026-07-28T14:43:44.000Z",
+  "total": 446,
   "ultimo": "2026-07-27",
-  "generador": "semilla v2 (validada)",
-  "pozoBaloto": 54400,
-  "pozoRevancha": 9200
+  "generador": "GitHub Actions · scraper v3 (parser universal + pozo)",
+  "pozoBaloto": 2026,
+  "pozoRevancha": 2026
  },
  "sorteos": [
   {
@@ -1743,28 +1743,6 @@
    ]
   },
   {
-   "fecha": "2025-12-11",
-   "balotas": [
-    1,
-    18,
-    21,
-    22,
-    24
-   ],
-   "sb": 14,
-   "fuentes": [
-    "semilla-app"
-   ],
-   "revancha": [
-    3,
-    8,
-    19,
-    29,
-    36
-   ],
-   "rsb": 11
-  },
-  {
    "fecha": "2025-12-10",
    "balotas": [
     3,
@@ -3171,20 +3149,6 @@
    ]
   },
   {
-   "fecha": "2025-05-11",
-   "balotas": [
-    9,
-    14,
-    29,
-    35,
-    40
-   ],
-   "sb": 3,
-   "fuentes": [
-    "semilla-app"
-   ]
-  },
-  {
    "fecha": "2025-05-10",
    "balotas": [
     2,
@@ -3437,20 +3401,6 @@
    ]
   },
   {
-   "fecha": "2025-03-11",
-   "balotas": [
-    5,
-    9,
-    26,
-    28,
-    32
-   ],
-   "sb": 3,
-   "fuentes": [
-    "semilla-app"
-   ]
-  },
-  {
    "fecha": "2025-03-08",
    "balotas": [
     1,
@@ -3670,20 +3620,6 @@
     43
    ],
    "sb": 1,
-   "fuentes": [
-    "semilla-app"
-   ]
-  },
-  {
-   "fecha": "2025-01-12",
-   "balotas": [
-    11,
-    24,
-    25,
-    26,
-    43
-   ],
-   "sb": 7,
    "fuentes": [
     "semilla-app"
    ]
