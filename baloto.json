@@ -1,33 +1,11 @@
 {
  "meta": {
-  "actualizado": "2026-07-28T14:03:48.502Z",
-  "total": 451,
-  "ultimo": "2026-07-28",
-  "generador": "GitHub Actions · scraper v2 (parser universal)"
+  "actualizado": "2026-07-28T00:00:00.000Z",
+  "total": 450,
+  "ultimo": "2026-07-27",
+  "generador": "semilla v2 (validada)"
  },
  "sorteos": [
-  {
-   "fecha": "2026-07-28",
-   "fuentes": [
-    "resultadobaloto"
-   ],
-   "balotas": [
-    1,
-    2,
-    3,
-    4,
-    5
-   ],
-   "sb": 6,
-   "revancha": [
-    1,
-    5,
-    10,
-    26,
-    38
-   ],
-   "rsb": 4
-  },
   {
    "fecha": "2026-07-27",
    "balotas": [

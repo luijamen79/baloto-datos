@@ -42,8 +42,54 @@ async function get(url, ms = 25000) {
   } finally { clearTimeout(t); }
 }
 
+// ── Limpieza de HTML ───────────────────────────────────────────────
+// FIX: el parser se probó con texto ya convertido a markdown, pero el
+// scraper descarga HTML CRUDO. Las etiquetas separaban los números y
+// rompían la prueba de compacidad. Además metían ruido de menús y
+// paginaciones. Se elimina script/style/nav/footer y todas las etiquetas.
+function limpiarHtml(html) {
+  return html
+    .replace(/<(script|style|nav|footer|header|aside|select|noscript)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(+d))
+    .replace(/[ \t]+/g, ' ');
+}
+
+// ── Validación de sorteo real ──────────────────────────────────────
+// El Baloto SOLO juega lunes, miércoles y sábado. Cualquier otra fecha
+// es ruido (fecha de publicación, "actualizado el...", etc.).
+function esDiaDeSorteo(iso) {
+  const d = new Date(iso + 'T12:00:00').getDay();   // 0=DOM 1=LUN ... 6=SAB
+  return d === 1 || d === 3 || d === 6;
+}
+
+// Rechaza combinaciones que son claramente artefactos de maquetación:
+// 1-2-3-4-5 con superbalota 6 es una paginación, no un sorteo.
+function esSecuenciaFalsa(b, sb) {
+  let consec = true;
+  for (let i = 1; i < b.length; i++) if (b[i] !== b[i-1] + 1) { consec = false; break; }
+  return consec && (sb === b[4] + 1 || sb === b[0] - 1 || b[0] === 1);
+}
+
+function sorteoValido(iso, b, sb) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const y = +iso.slice(0, 4);
+  if (y < 2017 || y > 2100) return false;
+  if (new Date(iso + 'T12:00:00') > new Date()) return false;   // no futuras
+  if (!esDiaDeSorteo(iso)) return false;
+  if (b.length !== 5 || new Set(b).size !== 5) return false;
+  if (!b.every(n => n >= 1 && n <= 43)) return false;
+  if (!(sb >= 1 && sb <= 16)) return false;
+  if (esSecuenciaFalsa(b, sb)) return false;
+  return true;
+}
+
 // ── PARSER UNIVERSAL (idéntico al que corre en la app) ─────────────
-function parseUniversal(txt) {
+function parseUniversal(htmlCrudo) {
+  const txt = limpiarHtml(htmlCrudo);
   const anclas = [];
   const add = (iso, end) => { if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) anclas.push({ iso, end }); };
 
@@ -86,8 +132,7 @@ function parseUniversal(txt) {
 
   const vistos = new Set(), fin2 = [];
   for (const r of res) {
-    const y = +r.fecha.slice(0, 4);
-    if (y < 2017 || y > 2100) continue;
+    if (!sorteoValido(r.fecha, r.balotas, r.sb)) continue;
     if (vistos.has(r.fecha)) continue;
     vistos.add(r.fecha); fin2.push(r);
   }
@@ -131,7 +176,7 @@ try {
     const tok = [...seg.matchAll(/\b(\d{1,2})\b/g)].map(m => +m[1]);
     for (let k = 0; k + 6 <= tok.length; k++) {
       const b = tok.slice(k, k + 5).sort((x, y) => x - y), sb = tok[k + 5];
-      if (b.length === 5 && new Set(b).size === 5 && b.every(n => n >= 1 && n <= 43) && sb >= 1 && sb <= 16) {
+      if (b.length === 5 && new Set(b).size === 5 && b.every(n => n >= 1 && n <= 43) && sb >= 1 && sb <= 16 && !esSecuenciaFalsa(b, sb)) {
         const ult = [...map.keys()].sort().pop();
         const e = map.get(ult);
         if (e) { e.revancha = b; e.rsb = sb; }
@@ -155,7 +200,15 @@ if (!nuevos.length) {
 
 let previo = { sorteos: [] };
 if (existsSync(OUT)) { try { previo = JSON.parse(readFileSync(OUT, 'utf8')); } catch {} }
-const acum = new Map((previo.sorteos || []).map(s => [s.fecha, s]));
+
+// Purga: elimina registros inválidos que se hayan colado en ejecuciones
+// anteriores (p. ej. el falso 2026-07-28 [1,2,3,4,5] SB:6 de un martes).
+const antes = (previo.sorteos || []).length;
+const limpios = (previo.sorteos || []).filter(s => sorteoValido(s.fecha, s.balotas, s.sb));
+const purgados = antes - limpios.length;
+if (purgados) console.log(`Purgados ${purgados} registro(s) invalido(s) del historico.`);
+
+const acum = new Map(limpios.map(s => [s.fecha, s]));
 let agregados = 0, enriquecidos = 0;
 for (const s of nuevos) {
   const old = acum.get(s.fecha);
