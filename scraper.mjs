@@ -140,73 +140,85 @@ function parseUniversal(htmlCrudo) {
 }
 
 // ── Pozo acumulado ─────────────────────────────────────────────────
-// No es deducible de los sorteos: lo publica la lotería en cada web.
+// Historial de fallos de esta función, para que no se repitan:
+//   1) Capturó el AÑO: "...de julio de 2026" + "millones" de otra etiqueta.
+//      Arreglo: exigir "$" y rechazar 4 dígitos entre 1990-2100 sin separador.
+//   2) Capturó el MÍNIMO: "Baloto ofrece un premio que inicia en $4.000
+//      millones" es texto promocional fijo, no el acumulado de hoy.
+//      Arreglo: rechazar si va precedido de inicia/desde/inicial/mínimo.
 //
-// FALLO DE LA VERSIÓN ANTERIOR: buscaba un número cerca de la palabra
-// "baloto" y capturó el AÑO. Tras limpiar etiquetas, un texto como
-// "...de julio de 2026" quedaba pegado a la palabra "millones" de otro
-// elemento, y 2026 pasaba el filtro porque un pozo de 2.026 millones es
-// perfectamente plausible. El año se disfrazaba de cifra válida.
-//
-// AHORA exige pruebas fuertes y, ante la duda, devuelve null.
-// Es preferible no mostrar pozo a mostrarlo mal.
+// La fuente buena es la oficial baloto.com/resultados, que lo publica así:
+//   BALOTO $50.400 MILLONES - ACUMULADO
+//   REVANCHA $9.200 MILLONES - ACUMULADO
+// Ese formato es inequívoco. Se prioriza; el resto son respaldo.
 function extraerPozo(htmlCrudo) {
   const t = limpiarHtml(htmlCrudo);
   const out = { baloto: null, revancha: null };
 
-  // Un número con pinta de año (4 dígitos entre 1990 y 2100 y sin
-  // separador de miles) nunca es un pozo. "54.400" sí lo es; "2026" no.
-  const pareceAnio = crudo => /^\d{4}$/.test(crudo) && +crudo >= 1990 && +crudo <= 2100;
-
-  const aMillones = (crudo, unidad) => {
-    const v = parseFloat(crudo.replace(/\./g, '').replace(',', '.'));
+  const pareceAnio = c => /^\d{4}$/.test(c) && +c >= 1990 && +c <= 2100;
+  const aMillones = (c, u) => {
+    // Ambigüedad de la coma: "50,000" son cincuenta mil (separador de millar,
+    // estilo inglés) pero "54,4" son 54 con 4 (decimal, estilo español).
+    // Regla: coma seguida de exactamente 3 dígitos al final = millar.
+    let limpio;
+    if (/,\d{3}$/.test(c)) limpio = c.replace(/[.,]/g, '');
+    else                    limpio = c.replace(/\./g, '').replace(',', '.');
+    const v = parseFloat(limpio);
     if (!isFinite(v)) return null;
-    if (/mil\s*mill/i.test(unidad)) return v * 1000;
-    if (/mill/i.test(unidad))       return v;
-    if (v > 1e9)                    return v / 1e6;   // escrito en pesos
+    if (/mil\s*mill/i.test(u)) return v * 1000;
+    if (/mill/i.test(u))       return v;
     return null;
   };
+  // Palabras que delatan el premio MÍNIMO, no el acumulado vigente
+  const esMinimo = ctx => /(inicia|inicial|desde|arranca|m[ií]nimo|por solo|apuesta por)/i.test(ctx);
+  const plausible = v => v !== null && v >= 1500 && v <= 400000;
 
-  // Se ancla en palabras de premio, no en "baloto"/"revancha" sueltas,
-  // y exige el símbolo $ o una palabra de acumulado a menos de 40 caracteres.
-  const RX = /(acumulad\w*|pozo|premio|bolsa|jackpot|baloto|revancha)[^.]{0,40}?\$\s*([\d.,]+)\s*(mil\s*millones|millones|mill\.?)/gi;
-  const RX2 = /\$\s*([\d.,]+)\s*(mil\s*millones|millones)[^.]{0,40}?(acumulad\w*|pozo|premio)/gi;
+  // ── Patrón oficial (máxima confianza) ────────────────────────────
+  const OFICIAL = /(BALOTO|REVANCHA)[^A-Za-z0-9]{0,20}\$\s*([\d.,]+)[^A-Za-z0-9]{0,10}MILLONES[^A-Za-z0-9]{0,10}ACUMULAD/gi;
+  for (const m of t.matchAll(OFICIAL)) {
+    if (pareceAnio(m[2])) continue;
+    const v = aMillones(m[2], 'millones');
+    if (!plausible(v)) continue;
+    const k = /revancha/i.test(m[1]) ? 'revancha' : 'baloto';
+    if (!out[k]) out[k] = Math.round(v);
+  }
+  if (out.baloto) return out;   // oficial encontrado: no seguir buscando
+
+  // ── Respaldo: prensa y agregadores ───────────────────────────────
+  const RX = /(acumulad\w*|pozo|premio mayor|bolsa)[^.]{0,40}?\$\s*([\d.,]+)\s*(mil\s*millones|millones)/gi;
+  const RX2 = /(baloto|revancha)\s*:?\s*\$\s*([\d.,]+)\s*(mil\s*millones|millones)/gi;
 
   const hallazgos = [];
   for (const rx of [RX, RX2]) {
     for (const m of t.matchAll(rx)) {
-      const crudo  = rx === RX ? m[2] : m[1];
-      const unidad = rx === RX ? m[3] : m[2];
-      if (pareceAnio(crudo)) continue;
-      const v = aMillones(crudo, unidad);
-      // Rango real del Baloto: mínimo ~2.000M, histórico máximo ~200.000M
-      if (v === null || v < 1500 || v > 400000) continue;
+      if (pareceAnio(m[2])) continue;
+      // Ventana previa para descartar texto promocional del mínimo
+      if (esMinimo(t.slice(Math.max(0, m.index - 70), m.index + m[0].length))) continue;
+      const v = aMillones(m[2], m[3]);
+      if (!plausible(v)) continue;
       hallazgos.push({ v, pos: m.index, fin: m.index + m[0].length });
     }
   }
   if (!hallazgos.length) return out;
 
-  // Asigna cada cifra a Baloto o Revancha según qué palabra esté más cerca.
-  // Solo hacia ATRÁS: en "Baloto llega a $54.400 millones y la Revancha
-  // a $9.200" mirar hacia adelante hacía que el pozo del Baloto viera la
-  // palabra "Revancha" posterior y se la adjudicara.
-  // Ventana: 220 caracteres previos MÁS el propio texto capturado.
-  // En "acumulado de Baloto llega a $54.400 millones" la palabra "Baloto"
-  // está DENTRO de la coincidencia, no antes. Pero no se mira más allá del
-  // final: si no, el pozo del Baloto vería una "Revancha" posterior.
-  const cerca = (h, palabra) => {
+  const cerca = (h, p) => {
     const ini = Math.max(0, h.pos - 220);
     const ctx = t.slice(ini, h.fin).toLowerCase();
-    const i = ctx.lastIndexOf(palabra);
+    const i = ctx.lastIndexOf(p);
     return i === -1 ? 1e9 : Math.abs(h.pos - (ini + i));
   };
   for (const h of hallazgos) {
-    const dR = cerca(h, 'revancha');
+    // "Baloto Revancha" es el nombre completo del producto secundario.
+    // Si aparece la palabra "revancha" en la ventana, manda ella aunque
+    // "baloto" esté escrita antes.
+    const ventana = t.slice(Math.max(0, h.pos - 90), h.fin).toLowerCase();
+    if (ventana.includes('revancha')) { if (!out.revancha) out.revancha = Math.round(h.v); continue; }
     const dB = cerca(h, 'baloto');
-    if (dR < dB && dR < 220) { if (!out.revancha) out.revancha = Math.round(h.v); }
-    else if (dB < 220)       { if (!out.baloto)   out.baloto   = Math.round(h.v); }
+    if (dB < 220) { if (!out.baloto) out.baloto = Math.round(h.v); }
+    else if (/acumulad|pozo|premio mayor/i.test(ventana) && !out.baloto) {
+      out.baloto = Math.round(h.v);   // "el acumulado alcanzó los $X" sin nombrar el juego
+    }
   }
-  // El pozo de la Revancha siempre es menor que el del Baloto.
   if (out.baloto && out.revancha && out.revancha > out.baloto) {
     [out.baloto, out.revancha] = [out.revancha, out.baloto];
   }
@@ -214,6 +226,7 @@ function extraerPozo(htmlCrudo) {
 }
 
 const FUENTES = [
+  ['baloto-oficial',       'https://baloto.com/resultados'],
   ['resultadodelaloteria', 'https://resultadodelaloteria.com/colombia/baloto'],
   ['elespectador',         'https://www.elespectador.com/resultados-loterias/baloto/'],
   ['resultadobaloto',      'https://www.resultadobaloto.com/index.php'],
