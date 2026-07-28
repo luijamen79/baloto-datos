@@ -139,6 +139,38 @@ function parseUniversal(htmlCrudo) {
   return fin2;
 }
 
+// ── Pozo acumulado ─────────────────────────────────────────────────
+// No es deducible de los sorteos: lo publica la lotería en cada web.
+// Formatos vistos: "$54.400 millones", "54.400 millones de pesos",
+// "acumulado de $54.400.000.000". Se normaliza todo a MILLONES.
+function extraerPozo(htmlCrudo) {
+  const t = limpiarHtml(htmlCrudo);
+  const out = { baloto: null, revancha: null };
+
+  const aMillones = (num, unidad) => {
+    let v = parseFloat(num.replace(/\./g, '').replace(',', '.'));
+    if (!isFinite(v)) return null;
+    if (/mil\s*mill/i.test(unidad)) return v * 1000;   // "mil millones" PRIMERO:
+    if (/mill?on/i.test(unidad)) return v;             // "millones" es subcadena suya
+    if (v > 1e9) return v / 1e6;                       // cifra escrita en pesos
+    return v;
+  };
+
+  // Busca "Baloto ... $X millones" y "Revancha ... $X millones"
+  for (const [clave, rx] of [
+    ['baloto',   /baloto[^.]{0,160}?\$?\s*([\d.,]+)\s*(mil\s*millones|millones|pesos)/i],
+    ['revancha', /revancha[^.]{0,160}?\$?\s*([\d.,]+)\s*(mil\s*millones|millones|pesos)/i]
+  ]) {
+    const m = t.match(rx);
+    if (m) {
+      const v = aMillones(m[1], m[2]);
+      // Cordura: el pozo del Baloto va de ~2.000M a ~200.000M
+      if (v && v >= 1000 && v <= 500000) out[clave] = Math.round(v);
+    }
+  }
+  return out;
+}
+
 const FUENTES = [
   ['resultadodelaloteria', 'https://resultadodelaloteria.com/colombia/baloto'],
   ['elespectador',         'https://www.elespectador.com/resultados-loterias/baloto/'],
@@ -149,6 +181,7 @@ const FUENTES = [
 // ── MAIN ───────────────────────────────────────────────────────────
 const map = new Map();
 const informe = [];
+const pozo = { baloto: null, revancha: null };
 
 for (const [nombre, url] of FUENTES) {
   try {
@@ -162,6 +195,11 @@ for (const [nombre, url] of FUENTES) {
       map.set(f.fecha, prev); n++;
     }
     informe.push(`  ${n ? '\u2713' : '\u00b7'} ${nombre}: ${n} registros`);
+    if (!pozo.baloto || !pozo.revancha) {
+      const p = extraerPozo(html);
+      if (!pozo.baloto && p.baloto) pozo.baloto = p.baloto;
+      if (!pozo.revancha && p.revancha) pozo.revancha = p.revancha;
+    }
   } catch (e) {
     informe.push(`  \u2717 ${nombre}: ${e.message}`);
   }
@@ -222,7 +260,9 @@ writeFileSync(OUT, JSON.stringify({
     actualizado: new Date().toISOString(),
     total: lista.length,
     ultimo: lista[0]?.fecha || null,
-    generador: 'GitHub Actions · scraper v2 (parser universal)'
+    generador: 'GitHub Actions · scraper v3 (parser universal + pozo)',
+    pozoBaloto: pozo.baloto,
+    pozoRevancha: pozo.revancha
   },
   sorteos: lista
 }, null, 1));
@@ -231,6 +271,8 @@ console.log(`\nTotal acumulado : ${lista.length}`);
 console.log(`Nuevos agregados: ${agregados}`);
 console.log(`Enriquecidos    : ${enriquecidos}`);
 console.log(`Ultimo sorteo   : ${lista[0]?.fecha} -> [${lista[0]?.balotas}] SB:${lista[0]?.sb}`);
+console.log(`Pozo Baloto     : ${pozo.baloto ? pozo.baloto.toLocaleString('es') + ' millones' : 'no detectado'}`);
+console.log(`Pozo Revancha   : ${pozo.revancha ? pozo.revancha.toLocaleString('es') + ' millones' : 'no detectado'}`);
 
 // Alarma: si el sorteo más reciente tiene más de 5 días, algo se rompió.
 // Falla en ROJO en vez de quedarse callado como pasó en junio-julio.
