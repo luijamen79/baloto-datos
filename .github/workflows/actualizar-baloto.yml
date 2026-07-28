@@ -1,0 +1,56 @@
+name: Actualizar resultados Baloto
+
+on:
+  schedule:
+    # El Baloto juega LUN, MIE y SAB entre 23:00 y 23:15 hora Colombia (UTC-5).
+    # Corremos 45 min después → 23:50 COL = 04:50 UTC del día siguiente.
+    # Días UTC: martes(2), jueves(4), domingo(0).
+    - cron: '50 4 * * 2,4,0'
+    # Segundo intento 3 h más tarde por si una fuente aún no publicó.
+    - cron: '50 7 * * 2,4,0'
+  workflow_dispatch:        # botón manual en la pestaña Actions
+
+permissions:
+  contents: write
+
+concurrency:
+  group: actualizar-baloto
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Ejecutar scraper
+        id: scrape
+        run: node scraper.mjs | tee salida.log
+
+      - name: Publicar si hay cambios
+        run: |
+          if git diff --quiet -- baloto.json; then
+            echo "Sin cambios: baloto.json ya está al día."
+            exit 0
+          fi
+          git config user.name  "baloto-bot"
+          git config user.email "actions@github.com"
+          git add baloto.json
+          ULTIMO=$(node -e "console.log(require('./baloto.json').meta.ultimo)")
+          TOTAL=$(node -e "console.log(require('./baloto.json').meta.total)")
+          git commit -m "Sorteo ${ULTIMO} · ${TOTAL} en total"
+          git push
+
+      - name: Resumen
+        if: always()
+        run: |
+          echo "### Actualización Baloto" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat salida.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "sin salida" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
