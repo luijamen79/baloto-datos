@@ -1,13 +1,29 @@
 {
  "meta": {
-  "actualizado": "2026-09-13T12:51:52.224Z",
-  "total": 466,
-  "ultimo": "2026-09-12",
+  "actualizado": "2026-09-15T09:38:24.875Z",
+  "total": 467,
+  "ultimo": "2026-09-14",
   "generador": "GitHub Actions · scraper v3 (parser universal + pozo)",
-  "pozoBaloto": 58400,
-  "pozoRevancha": 2000
+  "pozoBaloto": 58800,
+  "pozoRevancha": 2200
  },
  "sorteos": [
+  {
+   "fecha": "2026-09-14",
+   "fuentes": [
+    "baloto-oficial",
+    "resultadodelaloteria",
+    "resultadobaloto"
+   ],
+   "balotas": [
+    3,
+    5,
+    10,
+    20,
+    31
+   ],
+   "sb": 8
+  },
   {
    "fecha": "2026-09-12",
    "fuentes": [
