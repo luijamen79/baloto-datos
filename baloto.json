@@ -1,11 +1,11 @@
 {
  "meta": {
-  "actualizado": "2026-10-04T10:46:27.148Z",
+  "actualizado": "2026-10-04T13:29:49.750Z",
   "total": 475,
   "ultimo": "2026-10-03",
   "generador": "GitHub Actions · scraper v3 (parser universal + pozo)",
-  "pozoBaloto": 61600,
-  "pozoRevancha": 2000
+  "pozoBaloto": 4300,
+  "pozoRevancha": 2200
  },
  "sorteos": [
   {
